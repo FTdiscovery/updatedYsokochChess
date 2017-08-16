@@ -184,10 +184,18 @@ public class mxjava {
 
 	//FOR NEURAL NETWORK MATHEMATICS
 	public static double sigmoidPackage(double x, boolean deriv) {
+		double sigmoid = 1/(1+Math.pow(Math.E,-x));
 		if (deriv) {
 			return x*(1-x);
 		}
-		return 1/(1+Math.pow(Math.E,-x));
+		return sigmoid;
+	}
+	
+	public static double tanhPackage(double x, boolean deriv) {
+		if (deriv) {
+			return 1-(x*x);
+		}
+		return Math.tanh(x);
 	}
 
 	public static double[][] synapseLayer(int inputs, int outputs) {
@@ -220,6 +228,27 @@ public class mxjava {
 		}
 		return newMatrix;
 	}
+	
+	public static double[][] scalarMultNum(double[][]firstMatrix,double number) {
+		double[][] newMatrix = new double[firstMatrix.length][firstMatrix[0].length];
+		for (int i = 0; i < newMatrix.length; i++) { 
+			for (int j = 0; j < newMatrix[0].length; j++) { 
+				newMatrix[i][j] = firstMatrix[i][j]*number;
+			}
+		}
+		return newMatrix;
+	}
+	
+	public static double[][] adagrad(double[][]firstMatrix) {
+		double[][] newMatrix = new double[firstMatrix.length][firstMatrix[0].length];
+		for (int i = 0; i < newMatrix.length; i++) { 
+			for (int j = 0; j < newMatrix[0].length; j++) { 
+				newMatrix[i][j] = Math.pow(firstMatrix[i][j], -0.5)*100;
+			}
+		}
+		return newMatrix;
+	}
+	
 	public static double[][] subtract(double[][] firstMatrix, double[][] secondMatrix) {
 		double[][] result = new double[firstMatrix.length][firstMatrix[0].length];
 		for (int i = 0; i < firstMatrix.length; i++) {
