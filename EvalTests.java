@@ -36,6 +36,8 @@ public class EvalTests {
 	static int qwRookMoved = 0;
 	static int kbRookMoved = 0;
 	static int qbRookMoved = 0;
+	static int whiteCastled = 0;
+	static int blackCastled = 0;
 
 	static String pureLog = "";
 	static boolean debugOn = false;
@@ -95,6 +97,15 @@ public class EvalTests {
 			{-10,-20,-20,-20,-20,-20,-20,-10},
 			{ 20, 20,  0,  0,  0,  0, 20, 20},
 			{ 20, 30, 10,  0,  0, 10, 30, 20}};
+	static int kingStartBoard[][]={
+			{-30,-40,-40,-50,-50,-40,-40,-30},
+			{-30,-40,-40,-50,-50,-40,-40,-30},
+			{-30,-40,-40,-50,-50,-40,-40,-30},
+			{-30,-40,-40,-50,-50,-40,-40,-30},
+			{-40,-40,-40,-50,-50,-40,-40,-40},
+			{-40,-40,-40,-50,-50,-40,-40,-40},
+			{ 20, 20,-40,-50,-50,-40, 20, 20},
+			{ 20, 30, 10,  0,  0, 10, 30, 20}};
 	static int kingEndBoard[][]={ 
 			{-50,-40,-30,-20,-20,-30,-40,-50},
 			{-30,-20,-10,  0,  0,-10,-20,-30},
@@ -117,29 +128,33 @@ public class EvalTests {
 	static double[][] endInput = new double[1][endBoardToState().length];
 	static double[][] output = new double[1][tanRating(0).length];
 	static double[][] endOutput = new double[1][tanRating(0).length];
-	static int nodesPerLayer = 300; //TESTED: [150; 175; 200]
-	static double learningRate = 0.000025; //TESTED: [0.001; 0.001/0.002; 0.0005]
+	static int nodesPerLayer = 120; //TESTED: [150; 175; 200]
+	static double learningRate = 0.0008; //TESTED: [0.001; 0.001/0.002; 0.0005] 用 0.000005
 	static MomentumChessNeural brain = new MomentumChessNeural(input,output,nodesPerLayer,learningRate);
 
 	static int printInterval = 20;
-	static int nodesPerLayer2 = 100; //TESTED: [150; 175; 200]
-	static double learningRate2 = 0.000022; //TESTED: [0.001; 0.001/0.002; 0.0005]
+	static int nodesPerLayer2 = 40; //TESTED: [150; 175; 200]
+	static double learningRate2 = 0.022; //TESTED: [0.001; 0.001/0.002; 0.0005]
 	static MomentumChessNeural endGameBrain = new MomentumChessNeural(endInput,endOutput,nodesPerLayer2,learningRate2);
 
-	static double enoughTrainingBenchmark = 0.25;
-
+	static double enoughTrainingBenchmark = 0.05;
+	static int trainingRounds = 0;
+	static double scaleTanRating = 0.97; //1.15?
+	
 	public static double[] tanRating(double a) {
+		a*=scaleTanRating;
 		double[] rating = new double[1];
 		rating[0]=((Math.atan(a)+(Math.PI/2))/(Math.PI));
 		return rating;
 	}
 
 	public static double revertTanRating(double[] a) {
-		return Math.tan(Math.PI*(a[0]-0.5));
+		//System.out.println(Arrays.toString(tanRating(1))); //just checking.
+		return (Math.tan(Math.PI*(a[0]-0.5)))/scaleTanRating;
 	}
 
 	public static double[] ratingForNN(double a) {
-		double[] rating = new double[5];
+		double[] rating = new double[3];
 		rating[0]=0.5;
 		if (a>=-3 && a<=3) {
 			rating[0] += (a/6);
@@ -152,12 +167,6 @@ public class EvalTests {
 			rating[0]=0;
 			rating[2] = Math.min(1,((-3-a)/5));
 		}
-		if (a>=8) {
-			rating[3] = Math.min(1,((a-8)/5));
-		}
-		if (a<=-8) {
-			rating[4] = Math.min(1,((-8-a)/5));
-		}
 		return rating;
 
 	}
@@ -165,8 +174,8 @@ public class EvalTests {
 	public static double revertRating(double[] a) {
 		double value=0;
 		value += (a[0]*6)-3;
-		value += a[1]*5+a[3]*5;
-		value -= (a[2]*5+a[4]*5);
+		value += a[1]*5;
+		value -= (a[2]*5);
 
 		return value;
 
@@ -186,8 +195,8 @@ public class EvalTests {
 
 
 
-	static String[] books = {"yikarjakin2017","f4sucks","ammonia","a4sucks","h4sucks","sodiumsucks"};
-	static String[] bookAccuracyCheck = {"yikarjakin2017ratings","f4sucksrating","ammoniarating","a4sucksrating","h4sucksrating","sodiumsucksrating"};
+	static String[] books = {"f4sucks","ammonia","a4sucks","h4sucks","sodiumsucks","yikarjakin2017","shirovpolgar1994"};
+	static String[] bookAccuracyCheck = {"f4sucksrating","ammoniarating","a4sucksrating","h4sucksrating","sodiumsucksrating","yikarjakin2017ratings","shirovpolgar1994ratings"};
 	static String documents = System.getProperty ("user.home") + "/Documents/Procrastination Box/Chess Books/";
 	static ArrayList<String[]> library = new ArrayList<>();
 	static ArrayList<double[]> ratingLib = new ArrayList<>();
@@ -243,15 +252,15 @@ public class EvalTests {
 					if (totalMaterial()>3500) { addStateRating(move,rating); }
 					else { addEndGameStateRating(move,rating); }
 				}
-				//printBoard();
+				printBoard();
 			}
 			resetBoard();
 		}
 
 		//TRAIN STATES
-		brain.momentum=0.6;
+		brain.momentum=0.4;
 		endGameBrain.momentum=0.6;
-
+		
 		//They should all be the same.
 		System.out.println(STATES.size()==RATINGS.size());
 		System.out.println(ENDGAME_STATES.size()==ENDGAME_RATINGS.size());
@@ -275,20 +284,25 @@ public class EvalTests {
 		}
 		endGameBrain.INPUT_VALUES = etIn;
 		endGameBrain.OUTPUT_VALUES = etOut;
+
+		System.out.println(Arrays.toString(chessBoardToState()));
+		makeMove(MOVES.get(0));
+		System.out.println(Arrays.toString(chessBoardToState()));
+		resetBoard();
+		
 		
 		double threshold = 5;
-		int i = 0;
-		while (threshold>enoughTrainingBenchmark) {
-			int trainsPerRun = 5;
-			int runs = trainsPerRun*(i+1);
-			i++;
+		int trainsPerRun = 1;
+		while (threshold>enoughTrainingBenchmark && trainingRounds*trainsPerRun<7500) {
+			int runs = trainsPerRun*(trainingRounds+1);
+			trainingRounds++;
 			System.out.println("RUN #"+runs);
 
 			brain.trainNetwork(trainsPerRun);
 			double error = 0;
-			if (i%printInterval==0) { showAllPossibleWhiteMoves(); }
+			if (trainingRounds%printInterval==0) { showAllPossibleWhiteMoves(); }
 			for (int j = 0;j<STATES.size();j++) {
-				if (i%printInterval==0) {
+				if (trainingRounds%printInterval==0) {
 					/*
 					System.out.println("EXPECTED: " + Arrays.toString(RATINGS.get(j)) + " ("+ round(revertTanRating(RATINGS.get(j)),2) + ").");
 					System.out.println("NN THOUGHT: " + revertTanRating(brain.predict(chessBoardToState())) + " " +Arrays.toString(brain.predict(chessBoardToState())));
@@ -300,22 +314,23 @@ public class EvalTests {
 			error /= STATES.size();
 			if (error>4.5) brain.newSynapseWeights();
 			System.out.println("ERROR: " + round(error,4));
-			if (error<0.5) brain.momentum=0.8;
-			if (error<0.2) brain.momentum=1;
-			if (error<0.01) brain.momentum=0.1;
+			if (error<1.5) brain.momentum=0.9;
+			if (error<1) brain.momentum=0.85;
+			if (error<0.2) brain.momentum=0.3;
 
 			threshold = error;
 
 			double error2 = 0;
 
+			/*
 			// TRAIN THE END GAME COMPUTER
 			endGameBrain.trainNetwork(trainsPerRun);
 			for (int j = 0;j<ENDGAME_STATES.size();j++) {
-				if (i%printInterval==0) {
-					/*
-					System.out.println("EXPECTED: " + Arrays.toString(ENDGAME_RATINGS.get(j)) + " ("+ round(revertTanRating(ENDGAME_RATINGS.get(j)),2) + ").");
-					System.out.println("NN THOUGHT: " + revertTanRating(endGameBrain.predict(endBoardToState())) + " " +Arrays.toString(endGameBrain.predict(endBoardToState())));
-					 */
+				if (trainingRounds%printInterval==0) {
+					
+					//System.out.println("EXPECTED: " + Arrays.toString(ENDGAME_RATINGS.get(j)) + " ("+ round(revertTanRating(ENDGAME_RATINGS.get(j)),2) + ").");
+					//System.out.println("NN THOUGHT: " + revertTanRating(endGameBrain.predict(endBoardToState())) + " " +Arrays.toString(endGameBrain.predict(endBoardToState())));
+					 
 				}
 				error2 += Math.abs(revertTanRating(endGameBrain.predict(endBoardToState()))-revertTanRating(ENDGAME_RATINGS.get(j)));
 				if (j<ENDGAME_MOVES.size()) makeMove(ENDGAME_MOVES.get(j));
@@ -326,34 +341,41 @@ public class EvalTests {
 			if (error2<0.8) endGameBrain.momentum=0.9;
 			if (error2<0.4) endGameBrain.momentum=0.6;
 			if (error2<0.1) endGameBrain.momentum=0.1;
+			*/
 
 			resetBoard();
+			if (runs%200==0) sampleGame();
 			System.out.println("-------NEW RUN-------\n");
 		}
 		
-		//PLAY OUT A GAME
-		String gameLog = "";
+		sampleGame();
+
+
+	}
+	
+	public static void sampleGame() {
 		int moves = 60;
 		totalMoves = 0;
-		while (totalMoves<moves) {
-			
+		boolean watchGame = false;
+		while (totalMoves<moves && gameStatus() ==5) {
+
 			if (totalMoves%2==0) {
 				String chosen = computerChosenWhiteMove();
-				System.out.println("WHITE MOVES");
+				if (watchGame) System.out.println("WHITE MOVES");
+				moveUpdatePGN(chosen);
 				makeMove(chosen);
-				gameLog+=chosen+"\n";
-				
+
 			}
 			else {
 				String chosen = computerChosenBlackMove();
-				System.out.println("BLACK MOVES");
+				if (watchGame) System.out.println("BLACK MOVES");
+				moveUpdatePGN(chosen);
 				makeMove(chosen);
-				gameLog+=chosen+"\n";
 			}
-			//printBoard();
-			totalMoves++;
+			if (watchGame) printBoard();
 		}
-		System.out.println(gameLog);
+		resetBoard();
+		
 	}
 
 	public static double round(double value, int places) {
@@ -364,11 +386,39 @@ public class EvalTests {
 		return bd.doubleValue();
 	}
 
-	//PIECE PROTECTION (# OF DEFENDERS) FOR EACH PIECE. [UNPROTECTED PIECES...ETC]
-	//SIMPLE EVALUATION FUNCTION THAT THE ROOK, BISHOP, KNIGHT, AND QUEEN CONTROL (PAWN OUTPOSTS)
-	//ATTACKING PIECES
-	//DEFENDERS
-	//ROOK ATTACKING ENEMY PAWNS (FOR ENDGAME)
+	
+	
+	public static double[] squaresDefended() {
+		double[] newArray = new double[128];
+		for (int i = 0;i<64;i++) {
+			int displayR = 8-(i/8);
+			String directory = colNames[i%8]+displayR;
+			if (controlSquareW(directory)[0]!=0) newArray[i]=0.1;
+			else if (controlSquareW(directory)[1]!=0) newArray[i]=0.32;
+			else if (controlSquareW(directory)[2]!=0) newArray[i]=0.35;
+			else if (controlSquareW(directory)[3]!=0) newArray[i]=0.6;
+			else if (controlSquareW(directory)[4]!=0) newArray[i]=1;
+			else { 
+				if (Character.isUpperCase(chessBoard[i/8][i%8].charAt(0)))newArray[i]=-1; //white piece
+				else newArray[i]=-0.5;
+				}
+			if (controlSquareB(directory)[0]!=0) newArray[64+i]=0;
+			else if (controlSquareB(directory)[1]!=0) newArray[64+i]=0.32;
+			else if (controlSquareB(directory)[2]!=0) newArray[64+i]=0.35;
+			else if (controlSquareB(directory)[3]!=0) newArray[64+i]=0.6;
+			else if (controlSquareB(directory)[4]!=0) newArray[64+i]=1;
+			else { 
+				if (Character.isUpperCase(chessBoard[i/8][i%8].charAt(0)))newArray[64+i]=-1; //white piece
+				else newArray[64+i]=-0.5;
+				}
+			/*
+			newArray[i]=mxjava.sumOfArrayParts(controlSquareW(directory));
+			newArray[64+i]=mxjava.sumOfArrayParts(controlSquareB(directory));
+			*/
+			
+		}
+		return newArray;
+	}
 
 
 	public static double[] rateAttack() {
@@ -400,6 +450,42 @@ public class EvalTests {
 		return attack;
 	}
 
+	//TO DO: FIND THE # OF ATTACKERS ADJACENT TO KING AND DEFENDERS
+	//IF THE POSSIBLE CAPTURED PIECES ARE DEFENDED
+	
+	public static double[] developedPieces() {
+		double[] newArray = new double[12];
+		if (!chessBoard[6][3].equals("P")) newArray[0]=-1; else newArray[0]=1;
+		if (!chessBoard[6][4].equals("P")) newArray[1]=-1; else newArray[1]=1;
+		if (!chessBoard[7][1].equals("N")) newArray[2]=-1; else newArray[2]=1;
+		if (!chessBoard[7][6].equals("N")) newArray[3]=-1; else newArray[3]=1;
+		if (!chessBoard[7][2].equals("B")) newArray[4]=-1; else newArray[4]=1;
+		if (!chessBoard[7][5].equals("B")) newArray[5]=-1; else newArray[5]=1;
+		if (!chessBoard[1][3].equals("p")) newArray[6]=-1; else newArray[6]=1;
+		if (!chessBoard[1][4].equals("p")) newArray[7]=-1; else newArray[7]=1;
+		if (!chessBoard[0][1].equals("n")) newArray[8]=-1; else newArray[8]=1;
+		if (!chessBoard[0][6].equals("n")) newArray[9]=-1; else newArray[9]=1;
+		if (!chessBoard[0][2].equals("b")) newArray[10]=-1; else newArray[10]=1;
+		if (!chessBoard[0][5].equals("b")) newArray[11]=-1; else newArray[11]=1;
+		return newArray;
+	}
+	
+	public static double[] canDevelop() {
+		double [] newArray = new double[20];
+		if (chessBoard[7][1].equals("N")) { newArray[0]=legalWN(57).split(" ").length/6-0.5; newArray[1]= (legalWN(57).length()>1)? 1:-1; }
+		if (chessBoard[7][6].equals("N")) { newArray[2]=legalWN(62).split(" ").length/6-0.5; newArray[3]= (legalWN(62).length()>1)? 1:-1; }
+		if (chessBoard[7][2].equals("B")) { newArray[4]=legalWB(58).split(" ").length/6-0.5; newArray[5]= (legalWB(58).length()>1)? 1:-1; }
+		if (chessBoard[7][5].equals("B")) { newArray[6]=legalWB(61).split(" ").length/6-0.5; newArray[7]= (legalWB(61).length()>1)? 1:-1; }
+		if (chessBoard[7][3].equals("Q")) { newArray[8]=legalWQ(59).split(" ").length/6-0.5; newArray[9]= (legalWQ(59).length()>1)? 1:-1; }
+		if (chessBoard[0][1].equals("n")) { newArray[10]=legalBN(1).split(" ").length/6-0.5; newArray[11]= (legalBN(1).length()>1)? 1:-1; }
+		if (chessBoard[0][6].equals("n")) { newArray[12]=legalBN(6).split(" ").length/6-0.5; newArray[13]= (legalBN(6).length()>1)? 1:-1; }
+		if (chessBoard[0][2].equals("b")) { newArray[14]=legalBB(2).split(" ").length/6-0.5; newArray[15]= (legalBB(2).length()>1)? 1:-1; }
+		if (chessBoard[0][5].equals("b")) { newArray[16]=legalBB(5).split(" ").length/6-0.5; newArray[17]= (legalBB(5).length()>1)? 1:-1; }
+		if (chessBoard[0][3].equals("q")) { newArray[18]=legalBQ(3).split(" ").length/6-0.5; newArray[19]= (legalBQ(3).length()>1)? 1:-1; }
+		//[add rook in future?] 
+		return newArray;
+	}
+	
 	
 	public static int[] whiteKingZone() {
 		ArrayList<Integer> places = new ArrayList<>();
@@ -539,6 +625,8 @@ public class EvalTests {
 		return newArray;
 	}
 
+	//CHECK WHERE THE PIECE IS (MAYBE) AND HOW MANY ATTACKERS, DEFENDERS THERE ARE, THE WEAKEST DEFENDER, AND THE WEAKEST PIECE THAT CAN MAKE THE CAPTURE
+	//[] NUMBER, [] NUMBER, [0,0,0,0,0,0] ARRAY OF FIVE FOR WEAKEST DEFENDER, [0,0,0,0,0,0] PIECE THAT CAN MAKE THE CAPTURE.
 	public static double[] possibleCaptures() {
 		double[] newArray = new double[10]; //WP,WN,WB,WR,WQ,BP,BN,BB,BR,BQ
 		String[] wMoves = legalWMoves();
@@ -617,7 +705,7 @@ public class EvalTests {
 		else {
 			for (int i = 0;i<legalWMoves().length;i++) {
 				makeMove(legalWMoves[i]);
-				System.out.println(legalWMoves[i] + ": " + round(revertTanRating(brain.predict(chessBoardToState())),2));
+				System.out.println(legalWMoves[i] + ": " + round(revertTanRating(brain.predict(chessBoardToState())),4));
 				undoMove(legalWMoves[i]);
 			}
 		}
@@ -630,13 +718,13 @@ public class EvalTests {
 		if (legalWMoves.length>0) {
 			for (int i = 0;i<legalWMoves.length;i++) {
 				makeMove(legalWMoves[i]);
-				ratingScores[i]=round(revertTanRating(brain.predict(chessBoardToState())),2);
+				ratingScores[i]=round(revertTanRating(brain.predict(chessBoardToState())),8);
 				undoMove(legalWMoves[i]);
 			}
 		}
 		return legalWMoves[mxjava.numberDirectory(ratingScores, legalWMoves)];
 	}
-	
+
 	public static String computerChosenBlackMove() {
 		String[] legalBMoves = legalBMoves();
 		double[] ratingScores = new double[legalBMoves.length];
@@ -687,6 +775,7 @@ public class EvalTests {
 	public static String compReadableMove(String a) {
 		String move = a;
 		String[] files = "abcdefgh".split("");
+		if (a.equals("O-O") || a.equals("O-O-O")) return a;
 		if (a.length()==2) {
 			for (int i = 0;i<files.length;i++) {
 				move = move.replace(files[i], Integer.toString(i));
@@ -705,13 +794,12 @@ public class EvalTests {
 					if (move.substring(4).equals("2")) move = move.substring(0,4)+"b";
 				}
 			}
-			
+
 		}
 		return move.toString();
 	}
 
 	public static void undoMove(String a) {
-		PGN_GAME_LOG = PGN_GAME_LOG.replace(moveUpdatePGN(a), "");
 		a = compReadableMove(a);
 		if (a.equals("O-O")) {
 			if (totalMoves%2!=0) {
@@ -721,6 +809,7 @@ public class EvalTests {
 				chessBoard[7][5] = " ";
 				whiteKingMoved--;
 				kwRookMoved--;
+				whiteCastled=0;
 			}
 			if (totalMoves%2!=1) {
 				chessBoard[0][4] = "k";
@@ -729,6 +818,7 @@ public class EvalTests {
 				chessBoard[0][5] = " ";
 				blackKingMoved--;
 				kbRookMoved--;
+				blackCastled=0;
 			}
 		}
 		if (a.length()>3 && a.length()<=4) {
@@ -773,6 +863,7 @@ public class EvalTests {
 					chessBoard[7][3] = " ";
 					whiteKingMoved--;
 					qwRookMoved--;
+					whiteCastled=0;
 				}
 				if (totalMoves%2!=1) {
 					chessBoard[0][4] = "k";
@@ -781,6 +872,7 @@ public class EvalTests {
 					chessBoard[0][3] = " ";
 					blackKingMoved--;
 					qbRookMoved--;
+					blackCastled=0;
 				}
 			}
 			else {
@@ -788,65 +880,65 @@ public class EvalTests {
 				chessBoard[8-(Character.getNumericValue(a.charAt(3)))][Character.getNumericValue(a.charAt(2))-1] = String.valueOf(a.charAt(4));
 			}
 		}
+		if (totalMoves>0) totalMoves--;
 	}
 
-	public static String moveUpdatePGN(String raw) {
+	public static void moveUpdatePGN(String raw) {
 		String a = compReadableMove(raw);
-		String moveMarker = (totalMoves%2==0) ? (totalMoves/2 + 1) + "." : "";
+		int directory = 8*(8-(Character.getNumericValue(a.charAt(1))))+Character.getNumericValue(a.charAt(0))-1;
+		String moveMarker = (totalMoves%2==0) ? (totalMoves/2+1) + "." : "";
+		String PGNPIECE = chessBoard[Math.min(7, directory/8)][Math.min(7,directory%8)].toUpperCase();
 		if (a.equals("O-O") || a.equals("O-O-O")) {
-			return moveMarker+a;
+			System.out.println( moveMarker+a);
 		}
 		else if (a.length()>4) {
 			if (!a.substring(4).equals("=")) {
-				if (chessBoard[8-(Character.getNumericValue(a.charAt(1)))][Character.getNumericValue(a.charAt(0))-1].toUpperCase().equals("P")) {
-					return moveMarker+raw.substring(0,1) + "x" + raw.substring(2,4);
+				if (PGNPIECE.equals("P")) {
+					System.out.println( moveMarker+raw.substring(0,1) + "x" + raw.substring(2,4));
 				}
-
 				else {
 					if (totalMoves%2==0) {
-						if (mxjava.specifyInitial(legalWMoves(), chessBoard, a)) return moveMarker+(chessBoard[8-(Character.getNumericValue(a.charAt(1)))][Character.getNumericValue(a.charAt(0))-1].toUpperCase() + raw.substring(0,1)+"x"+raw.substring(2,4)).replace("P", "");
-						else return moveMarker+(chessBoard[8-(Character.getNumericValue(a.charAt(1)))][Character.getNumericValue(a.charAt(0))-1].toUpperCase() + "x"+raw.substring(2,4)).replace("P", "");
+						if (mxjava.specifyInitial(legalWMoves(), chessBoard, a)) System.out.println( moveMarker+(PGNPIECE + raw.substring(0,1)+"x"+raw.substring(2,4)).replace("P", ""));
+						else System.out.println( (moveMarker+PGNPIECE+ "x"+raw.substring(2,4)).replace("P", ""));
 					}
 					else if (totalMoves%2==1) {
-						if (mxjava.specifyInitial(legalBMoves(), chessBoard, a)) return moveMarker+(chessBoard[8-(Character.getNumericValue(a.charAt(1)))][Character.getNumericValue(a.charAt(0))-1].toUpperCase() + raw.substring(0,1)+"x"+raw.substring(2,4)).replace("P", "");
-						else return moveMarker+(chessBoard[8-(Character.getNumericValue(a.charAt(1)))][Character.getNumericValue(a.charAt(0))-1].toUpperCase() + "x"+raw.substring(2,4)).replace("P", "");
+						if (mxjava.specifyInitial(legalBMoves(), chessBoard, a)) System.out.println( moveMarker+(PGNPIECE + raw.substring(0,1)+"x"+raw.substring(2,4)).replace("P", ""));
+						else System.out.println( moveMarker+(PGNPIECE + "x"+raw.substring(2,4)).replace("P", ""));
 					}}
 			}
 			else {
 				if (totalMoves%2==0) { 
 					if (raw.substring(0,1).equals(raw.substring(1,2))) {
-						return moveMarker+raw.substring(1,2) +"8="+raw.substring(3,4);
+						System.out.println( moveMarker+raw.substring(1,2) +"8="+raw.substring(3,4));
 					}
 					else {
-						return moveMarker+raw.substring(0,1) + "x" + raw.substring(1,2) +"8="+raw.substring(3,4);
+						System.out.println( moveMarker+raw.substring(0,1) + "x" + raw.substring(1,2) +"8="+raw.substring(3,4));
 					}
 				}
 				else if (totalMoves%2==1) { 
 					if (raw.substring(2,3) == "/") {
-						return moveMarker+raw.substring(1,2) +"1="+raw.substring(3,4).toUpperCase();
+						System.out.println( moveMarker+raw.substring(1,2) +"1="+raw.substring(3,4).toUpperCase());
 					}
 					else {
-						return moveMarker+raw.substring(0,1) + "x" + raw.substring(1,2) +"1="+raw.substring(3,4).toUpperCase();
+						System.out.println( moveMarker+raw.substring(0,1) + "x" + raw.substring(1,2) +"1="+raw.substring(3,4).toUpperCase());
 					}
 				}
 			}
 		}
 		else if (raw.length()==4) {	
 			if (totalMoves%2==0) {
-				if (mxjava.specifyInitial(legalWMoves(), chessBoard, a)) return moveMarker+(chessBoard[8-(Character.getNumericValue(a.charAt(1)))][Character.getNumericValue(a.charAt(0))-1].toUpperCase() + raw.substring(0,1)+raw.substring(2,4)).replace("P", "");
-				else return moveMarker+(chessBoard[8-(Character.getNumericValue(a.charAt(1)))][Character.getNumericValue(a.charAt(0))-1].toUpperCase() + raw.substring(2,4)).replace("P", "");
+				if (mxjava.specifyInitial(legalWMoves(), chessBoard, a)) System.out.println( moveMarker+(PGNPIECE + raw.substring(0,1)+raw.substring(2,4)).replace("P", ""));
+				else System.out.println( moveMarker+(PGNPIECE + raw.substring(2,4)).replace("P", ""));
 			}
 			else if (totalMoves%2==1) {
-				if (mxjava.specifyInitial(legalBMoves(), chessBoard, a)) return moveMarker+(chessBoard[8-(Character.getNumericValue(a.charAt(1)))][Character.getNumericValue(a.charAt(0))-1].toUpperCase() + raw.substring(0,1)+raw.substring(2,4)).replace("P", "");
-				else return moveMarker+(chessBoard[8-(Character.getNumericValue(a.charAt(1)))][Character.getNumericValue(a.charAt(0))-1].toUpperCase() + raw.substring(2,4)).replace("P", "");
+				if (mxjava.specifyInitial(legalBMoves(), chessBoard, a)) System.out.println( moveMarker+(PGNPIECE + raw.substring(0,1)+raw.substring(2,4)).replace("P", ""));
+				else System.out.println( moveMarker+(PGNPIECE + raw.substring(2,4)).replace("P", ""));
 			}
 		}
-		return "";
 	}
 
 	public static void makeMove(String a) {
-		String raw = a;
-		PGN_GAME_LOG += moveUpdatePGN(raw);
+
 		a = compReadableMove(a);
 
 		if (a.length()>3) {
@@ -875,6 +967,7 @@ public class EvalTests {
 					chessBoard[7][3] = "R";
 					whiteKingMoved++;
 					qwRookMoved++;
+					whiteCastled=1;
 				}
 				else if (totalMoves%2==1) {
 					chessBoard[0][4] = " ";
@@ -883,6 +976,7 @@ public class EvalTests {
 					chessBoard[0][3] = "r";
 					blackKingMoved++;
 					qbRookMoved++;
+					blackCastled=1;
 				}
 			}
 			else {
@@ -909,6 +1003,7 @@ public class EvalTests {
 					chessBoard[7][5] = "R";
 					whiteKingMoved++;
 					kwRookMoved++;
+					whiteCastled=1;
 				}
 				else if (totalMoves%2==1) {
 					chessBoard[0][4] = " ";
@@ -917,6 +1012,7 @@ public class EvalTests {
 					chessBoard[0][5] = "r";
 					blackKingMoved++;
 					kbRookMoved++;
+					blackCastled=1;
 				}
 			}
 		}
@@ -925,7 +1021,7 @@ public class EvalTests {
 		else {
 			PGN_GAME_LOG+=" ";
 		}
-
+		totalMoves++;
 	}
 
 	public static void printBoard() {
@@ -936,43 +1032,46 @@ public class EvalTests {
 		}
 		System.out.println("------------------------");
 	}
-	
+
 
 	//VERSION 2
 	public static double[] chessBoardToState() {
 		double[] newArray = mxjava.appendArrays(materialArray(), castlePossible());
-		newArray = mxjava.appendArrays(newArray, fPawn());
 		newArray = mxjava.appendArrays(newArray, simplePositionalEval());
 		newArray = mxjava.appendArrays(newArray, simplePositionalEvalSummed());
 		newArray = mxjava.appendArrays(newArray, piecesInMiddle());
-		//newArray = mxjava.appendArrays(newArray, mobilitySafe());
+		newArray = mxjava.appendArrays(newArray, canDevelop());
+		newArray = mxjava.appendArrays(newArray, mobilitySafe());
 		newArray = mxjava.appendArrays(newArray, mobility());
+		newArray = mxjava.appendArrays(newArray, materialPoints());
 		newArray = mxjava.appendArrays(newArray, wherePiecesAre());
 		newArray = mxjava.appendArrays(newArray, possibleCaptures());
 		newArray = mxjava.appendArrays(newArray, kingSafety());
 		newArray = mxjava.appendArrays(newArray, rateAttack());
-		newArray = mxjava.appendArrays(newArray, castlePossible());
 		newArray = mxjava.appendArrays(newArray, pawnStructure());
-		newArray = mxjava.appendArrays(newArray, materialPoints());
+		newArray = mxjava.appendArrays(newArray, squaresDefended());
+		newArray = mxjava.appendArrays(newArray, developedPieces());
+				
 		return newArray;
 	}
 
 	public static double[] endBoardToState() {
 		double[] newArray = mxjava.appendArrays(materialArray(), pawnStructure());
+		newArray = mxjava.appendArrays(newArray, materialPoints());
 		newArray = mxjava.appendArrays(newArray, simplePositionalEval());
 		newArray = mxjava.appendArrays(newArray, simplePositionalEvalSummed());
 		newArray = mxjava.appendArrays(newArray, piecesInMiddle());
-		//newArray = mxjava.appendArrays(newArray, mobilitySafe());
+		newArray = mxjava.appendArrays(newArray, mobilitySafe());
 		newArray = mxjava.appendArrays(newArray, mobility());
 		newArray = mxjava.appendArrays(newArray, wherePiecesAre());
 		newArray = mxjava.appendArrays(newArray, possibleCaptures());
 		newArray = mxjava.appendArrays(newArray, kingSafety());
 		newArray = mxjava.appendArrays(newArray, rateAttack());
 		newArray = mxjava.appendArrays(newArray, control());
-		newArray = mxjava.appendArrays(newArray, materialPoints());
+		newArray = mxjava.appendArrays(newArray, squaresDefended());
 		return newArray;
 	}
-	
+
 	//This checks the mobilitySafe of each piece. It uses the list of moves, and finds where each piece originates from.
 	public static double[] mobilitySafe() {
 		double[] mobilitySafe = new double[24]; //WNX2,WBX2,WRX2,WQ,BNX2,BBX2,BBX2,BQ, SPARESx2, Total Knight Mobilityx2, Total Bishop Mobilityx2, Total Rook Mobilityx2, Total Queen Mobilityx2
@@ -987,8 +1086,10 @@ public class EvalTests {
 		for (int i = 0;i<allWhite.length;i++) {
 			if (allWhite[i].length()>0) {
 				String startingPoint=compReadableMove(allWhite[i]);
+				boolean unprotected = mxjava.sumOfArrayParts(controlSquareB(allWhite[i].substring(2,4)))==0;
+				boolean protectedByPawn = controlSquareW(allWhite[i].substring(2, 4))[0]==1;
 				String pieceAtStartingPoint = chessBoard[8-(Character.getNumericValue(startingPoint.charAt(1)))][Character.getNumericValue(startingPoint.charAt(0))-1];
-				if(!pieceAtStartingPoint.equals("P") && !pieceAtStartingPoint.equals("K") && mxjava.sumOfArrayParts(controlSquareB(allWhite[i].substring(2,4)))==0) {
+				if(!pieceAtStartingPoint.equals("P") && !pieceAtStartingPoint.equals("K") && (unprotected || protectedByPawn)) {
 					String[] typesOfPieces={"N","B","R"};
 					for (int j = 0;j<typesOfPieces.length;j++) {
 						if (pieceAtStartingPoint.equals(typesOfPieces[j])) {
@@ -1006,7 +1107,7 @@ public class EvalTests {
 					}	
 				}
 				//Check Queen Mobility
-				if (pieceAtStartingPoint.equals("Q") && mxjava.sumOfArrayParts(controlSquareB(allWhite[i].substring(2,4)))==0) {
+				if (pieceAtStartingPoint.equals("Q") && (unprotected||protectedByPawn)) {
 					if (piecePositions[6].equals("")) {	piecePositions[6]=startingPoint.substring(0, 2); mobilitySafe[6]++; mobilitySafe[22]++;}
 					else if (startingPoint.substring(0,2).equals(piecePositions[6])) {mobilitySafe[6]++; mobilitySafe[22]++;}
 					else {
@@ -1021,8 +1122,10 @@ public class EvalTests {
 			if (allBlack[i].length()>0) {
 				String startingPoint=compReadableMove(allBlack[i]);
 				String pieceAtStartingPoint = " ";
+				boolean unprotected = mxjava.sumOfArrayParts(controlSquareW(allBlack[i].substring(2,4)))==0;
+				boolean protectedByPawn = controlSquareB(allBlack[i].substring(2, 4))[0]==1;
 				pieceAtStartingPoint = chessBoard[Math.max(0, Math.min(7,8-(Character.getNumericValue(startingPoint.charAt(1)))))][Math.max(0, Math.min(7, Character.getNumericValue(startingPoint.charAt(0))-1))];
-				if(!pieceAtStartingPoint.equals("p") && !pieceAtStartingPoint.equals("k") && mxjava.sumOfArrayParts(controlSquareW(allBlack[i].substring(2,4)))==0) {
+				if(!pieceAtStartingPoint.equals("p") && !pieceAtStartingPoint.equals("k") && (unprotected || protectedByPawn)) {
 					//do stuff
 					String[] typesOfPieces={"n","b","r"};
 					for (int j = 0;j<typesOfPieces.length;j++) {
@@ -1040,7 +1143,7 @@ public class EvalTests {
 						}
 					}	
 				}
-				if (pieceAtStartingPoint.equals("q") && mxjava.sumOfArrayParts(controlSquareW(allBlack[i].substring(2,4)))==0) {
+				if (pieceAtStartingPoint.equals("q") && (unprotected || protectedByPawn)) {
 					if (piecePositions[13].equals("")) {	piecePositions[13]=startingPoint.substring(0, 2); mobilitySafe[13]++; mobilitySafe[23]++;}
 					else if (startingPoint.substring(0,2).equals(piecePositions[13])) {mobilitySafe[13]++; mobilitySafe[23]++;}
 					else {
@@ -1113,7 +1216,7 @@ public class EvalTests {
 	}
 
 	public static double[] materialPoints() {
-		double[] newArray = new double[1];
+		double[] newArray = new double[4];
 		for (int i = 0;i<64;i++) {
 			switch(chessBoard[i/8][i%8]) {
 			case "P":newArray[0]+=100;
@@ -1126,21 +1229,25 @@ public class EvalTests {
 			break;
 			case "Q":newArray[0]+=990;
 			break;
-			case "p":newArray[0]-=100;
+			case "p":newArray[1]+=100;
 			break;
-			case "n":newArray[0]-=325;
+			case "n":newArray[1]+=325;
 			break;
-			case "b":newArray[0]-=335;
+			case "b":newArray[1]+=335;
 			break;
-			case "r":newArray[0]-=500;
+			case "r":newArray[1]+=500;
 			break;
-			case "q":newArray[0]-=990;
+			case "q":newArray[1]+=990;
 			break;
 			}
 		}
+		if (newArray[0]>newArray[1]) newArray[2]=1;
+		if (newArray[1]>newArray[0]) newArray[3]=1;
+		newArray[0] = (newArray[0]/2055)-1;
+		newArray[1] = (newArray[0]/2055)-1;
 		return newArray;
 	}
-	
+
 	public static double totalMaterial() {
 		double material = 0; //Pawn, Knight, Bishop, Rook, Queen [ White 5 : Black 5], White Double Knight, White Double Bishop, Black Double Knight, Black Double Bishop [3 = Yes, 0 = No]
 		for (int i = 0;i<64;i++) {
@@ -1173,11 +1280,21 @@ public class EvalTests {
 
 	public static double[] castlePossible() {
 		//WHITE SHORT, WHITE LONG, THEN BLACK SHORT, BLACK LONG. Yes is 1, No is 0.
-		double[] possibleCastle = new double[4];
+		double[] possibleCastle = new double[14];
 		if (kwRookMoved==0 && whiteKingMoved==0) possibleCastle[0]=1;
 		if (qwRookMoved==0 && whiteKingMoved==0) possibleCastle[1]=1;
 		if (kbRookMoved==0 && blackKingMoved==0) possibleCastle[2]=1;
 		if (qbRookMoved==0 && blackKingMoved==0) possibleCastle[3]=1;
+		possibleCastle[4]=whiteKingMoved/2;
+		possibleCastle[5]=blackKingMoved/2;
+		if (whiteKingMoved==0) possibleCastle[6]=1;
+		if (blackKingMoved==0) possibleCastle[7]=1;
+		possibleCastle[8]=whiteCastled;
+		possibleCastle[9]=blackCastled;
+		if (legalWK(findWhiteKing()).indexOf("O-O")!=-1) possibleCastle[10]=1;
+		if (legalWK(findWhiteKing()).indexOf("O-O-O")!=-1) possibleCastle[11]=1;
+		if (legalBK(findBlackKing()).indexOf("O-O")!=-1) possibleCastle[12]=1;
+		if (legalBK(findBlackKing()).indexOf("O-O-O")!=-1) possibleCastle[13]=1;
 		return possibleCastle;
 	}
 
@@ -1201,149 +1318,152 @@ public class EvalTests {
 		double[] count = new double[5]; //Pawn,Knight,Bishop,Rook,Queen
 		String place = compReadableMove(move);
 		int directory = (8*(8-Character.getNumericValue(place.charAt(1))))+(Character.getNumericValue(place.charAt(0)));
-		//check pawns.
-		if (directory%8!=0) { //not on a file 
-			int temp = directory+8;
-			if (chessBoard[temp/8][temp%8].equals("P")) {count[0]+=0.5;}
-		}
-		if (directory%8!=7) { //not on h file 
-			int temp = directory+6;
-			if (chessBoard[temp/8][temp%8].equals("P")) {count[0]+=0.5;}
-		}
-
-		//check knights.
-		for (int i=-1; i<=1; i+=2) {
-			for (int j=-1; j<=1; j+=2) {
-				try {
-					if ("N".equals(chessBoard[directory/8+i][directory%8+j*2])) {
-						count[1]+=0.3;
-					}
-				} catch (Exception e) {}
-				try {
-					if ("N".equals(chessBoard[directory/8+i*2][directory%8+j])) {
-						count[1]+=0.3;
-					}
-				} catch (Exception e) {}
+		if (directory<64 && directory>=0) {
+			//check pawns.
+			if (directory%8!=0 && directory>=8) { //not on a file 
+				int temp = directory-8;
+				if (chessBoard[temp/8][temp%8].equals("P")) {count[0]+=0.5;}
 			}
-		}
-		//check diagonals.
-		int temp=1;
-		for (int i=-1; i<=1; i+=2) {
-			for (int j=-1; j<=1; j+=2) {
+			if (directory%8!=7 && directory>=8) { //not on h file 
+				int temp = directory-6;
+				if (chessBoard[temp/8][temp%8].equals("P")) {count[0]+=0.5;}
+			}
+			//check knights.
+			for (int i=-1; i<=1; i+=2) {
+				for (int j=-1; j<=1; j+=2) {
+					try {
+						if ("N".equals(chessBoard[directory/8+i][directory%8+j*2])) {
+							count[1]+=0.3;
+						}
+					} catch (Exception e) {}
+					try {
+						if ("N".equals(chessBoard[directory/8+i*2][directory%8+j])) {
+							count[1]+=0.3;
+						}
+					} catch (Exception e) {}
+				}
+			}
+			//check diagonals.
+			int temp=1;
+			for (int i=-1; i<=1; i+=2) {
+				for (int j=-1; j<=1; j+=2) {
+					try {
+						while(" ".equals(chessBoard[directory/8+temp*i][directory%8+temp*j]) || Character.isUpperCase(chessBoard[directory/8+temp*i][directory%8+temp*j].charAt(0))) {temp++;}
+						if ("B".equals(chessBoard[directory/8+temp*i][directory%8+temp*j])) {
+							count[2]+=0.3;
+						}
+						if ("Q".equals(chessBoard[directory/8+temp*i][directory%8+temp*j])) {
+							count[4]+=0.3;
+						}
+					} catch (Exception e) {}
+					temp=1;
+				}
+			}
+			//check files and ranks.
+			for (int i=-1; i<=1; i+=2) {
 				try {
-					while(" ".equals(chessBoard[directory/8+temp*i][directory%8+temp*j]) || Character.isUpperCase(chessBoard[directory/8+temp*i][directory%8+temp*j].charAt(0))) {temp++;}
-					if ("B".equals(chessBoard[directory/8+temp*i][directory%8+temp*j])) {
-						count[2]+=0.3;
+					while(" ".equals(chessBoard[directory/8][directory%8+temp*i]) || Character.isUpperCase(chessBoard[directory/8][directory%8+temp*i].charAt(0))) {temp++;}
+					if ("R".equals(chessBoard[directory/8][directory%8+temp*i])) {
+						count[3]+=0.3;
 					}
-					if ("Q".equals(chessBoard[directory/8+temp*i][directory%8+temp*j])) {
+					if ("Q".equals(chessBoard[directory/8][directory%8+temp*i])) {
+						count[4]+=0.3;
+					}
+				} catch (Exception e) {}
+				temp=1;
+				try {
+					while(" ".equals(chessBoard[directory/8+temp*i][directory%8])  || Character.isUpperCase(chessBoard[directory/8+temp*i][directory%8].charAt(0))) {temp++;}
+					if ("R".equals(chessBoard[directory/8+temp*i][directory%8])) {
+						count[3]+=0.3;
+					}
+					if ("Q".equals(chessBoard[directory/8+temp*i][directory%8])) {
 						count[4]+=0.3;
 					}
 				} catch (Exception e) {}
 				temp=1;
 			}
 		}
-		//check files and ranks.
-		for (int i=-1; i<=1; i+=2) {
-			try {
-				while(" ".equals(chessBoard[directory/8][directory%8+temp*i]) || Character.isUpperCase(chessBoard[directory/8][directory%8+temp*i].charAt(0))) {temp++;}
-				if ("R".equals(chessBoard[directory/8][directory%8+temp*i])) {
-					count[3]+=0.3;
-				}
-				if ("Q".equals(chessBoard[directory/8][directory%8+temp*i])) {
-					count[4]+=0.3;
-				}
-			} catch (Exception e) {}
-			temp=1;
-			try {
-				while(" ".equals(chessBoard[directory/8+temp*i][directory%8])  || Character.isUpperCase(chessBoard[directory/8+temp*i][directory%8].charAt(0))) {temp++;}
-				if ("R".equals(chessBoard[directory/8+temp*i][directory%8])) {
-					count[3]+=0.3;
-				}
-				if ("Q".equals(chessBoard[directory/8+temp*i][directory%8])) {
-					count[4]+=0.3;
-				}
-			} catch (Exception e) {}
-			temp=1;
-		}
-
-
 		return count;
 	}
-	
+
 	public static double[] controlSquareB(String move) {
 		double[] count = new double[5]; //Pawn,Knight,Bishop,Rook,Queen
+
 		String place = compReadableMove(move);
 		int directory = (8*(8-Character.getNumericValue(place.charAt(1))))+(Character.getNumericValue(place.charAt(0)));
-		//check pawns.
-		if (directory%8!=0) { //not on a file 
-			int temp = directory-8;
-			if (chessBoard[temp/8][temp%8].equals("p")) {count[0]+=0.5;}
-		}
-		if (directory%8!=7) { //not on h file 
-			int temp = directory-8;
-			if (chessBoard[temp/8][temp%8].equals("p")) {count[0]+=0.5;}
-		}
-
-		//check knights.
-		for (int i=-1; i<=1; i+=2) {
-			for (int j=-1; j<=1; j+=2) {
-				try {
-					if ("n".equals(chessBoard[directory/8+i][directory%8+j*2])) {
-						count[1]+=0.3;
-					}
-				} catch (Exception e) {}
-				try {
-					if ("n".equals(chessBoard[directory/8+i*2][directory%8+j])) {
-						count[1]+=0.3;
-					}
-				} catch (Exception e) {}
+		if (directory>=0 && directory<64) {
+			//check pawns.
+			if (directory%8!=0 && directory<=55) { //not on a file 
+				int temp = directory+8;
+				if (chessBoard[temp/8][temp%8].equals("p")) {count[0]+=0.5;}
 			}
-		}
-		//check diagonals.
-		int temp=1;
-		for (int i=-1; i<=1; i+=2) {
-			for (int j=-1; j<=1; j+=2) {
+			if (directory%8!=7 && directory<=55) { //not on h file 
+				int temp = directory+6;
+				if (chessBoard[temp/8][temp%8].equals("p")) {count[0]+=0.5;}
+			}
+
+			//check knights.
+			for (int i=-1; i<=1; i+=2) {
+				for (int j=-1; j<=1; j+=2) {
+					try {
+						if ("n".equals(chessBoard[directory/8+i][directory%8+j*2])) {
+							count[1]+=0.3;
+						}
+					} catch (Exception e) {}
+					try {
+						if ("n".equals(chessBoard[directory/8+i*2][directory%8+j])) {
+							count[1]+=0.3;
+						}
+					} catch (Exception e) {}
+				}
+			}
+
+			//check diagonals.
+			int temp=1;
+			for (int i=-1; i<=1; i+=2) {
+				for (int j=-1; j<=1; j+=2) {
+					try {
+						while(" ".equals(chessBoard[directory/8+temp*i][directory%8+temp*j]) || Character.isLowerCase(chessBoard[directory/8+temp*i][directory%8+temp*j].charAt(0))) {temp++;}
+						if ("b".equals(chessBoard[directory/8+temp*i][directory%8+temp*j])) {
+							count[2]+=0.3;
+						}
+						if ("q".equals(chessBoard[directory/8+temp*i][directory%8+temp*j])) {
+							count[4]+=0.3;
+						}
+					} catch (Exception e) {}
+					temp=1;
+				}
+			}
+
+			//check files and ranks.
+			temp = 1;
+			for (int i=-1; i<=1; i+=2) {
 				try {
-					while(" ".equals(chessBoard[directory/8+temp*i][directory%8+temp*j]) || Character.isLowerCase(chessBoard[directory/8+temp*i][directory%8+temp*j].charAt(0))) {temp++;}
-					if ("b".equals(chessBoard[directory/8+temp*i][directory%8+temp*j])) {
-						count[2]+=0.3;
+					while(" ".equals(chessBoard[directory/8][directory%8+temp*i]) || Character.isLowerCase(chessBoard[directory/8][directory%8+temp*i].charAt(0))) {temp++;}
+					if ("r".equals(chessBoard[directory/8][directory%8+temp*i])) {
+						count[3]+=0.3;
 					}
-					if ("q".equals(chessBoard[directory/8+temp*i][directory%8+temp*j])) {
+					if ("q".equals(chessBoard[directory/8][directory%8+temp*i])) {
+						count[4]+=0.3;
+					}
+				} catch (Exception e) {}
+				temp=1;
+				try {
+					while(" ".equals(chessBoard[directory/8+temp*i][directory%8])  || Character.isLowerCase(chessBoard[directory/8+temp*i][directory%8].charAt(0))) {temp++;}
+					if ("r".equals(chessBoard[directory/8+temp*i][directory%8])) {
+						count[3]+=0.3;
+					}
+					if ("q".equals(chessBoard[directory/8+temp*i][directory%8])) {
 						count[4]+=0.3;
 					}
 				} catch (Exception e) {}
 				temp=1;
 			}
-		}
-		//check files and ranks.
-		for (int i=-1; i<=1; i+=2) {
-			try {
-				while(" ".equals(chessBoard[directory/8][directory%8+temp*i]) || Character.isLowerCase(chessBoard[directory/8][directory%8+temp*i].charAt(0))) {temp++;}
-				if ("r".equals(chessBoard[directory/8][directory%8+temp*i])) {
-					count[3]+=0.3;
-				}
-				if ("q".equals(chessBoard[directory/8][directory%8+temp*i])) {
-					count[4]+=0.3;
-				}
-			} catch (Exception e) {}
-			temp=1;
-			try {
-				while(" ".equals(chessBoard[directory/8+temp*i][directory%8])  || Character.isLowerCase(chessBoard[directory/8+temp*i][directory%8].charAt(0))) {temp++;}
-				if ("r".equals(chessBoard[directory/8+temp*i][directory%8])) {
-					count[3]+=0.3;
-				}
-				if ("q".equals(chessBoard[directory/8+temp*i][directory%8])) {
-					count[4]+=0.3;
-				}
-			} catch (Exception e) {}
-			temp=1;
-		}
 
-
+		}
 		return count;
 	}
 
-	//WILL HAVE TO BE CHANGED TO ADD PAWN PROTECTION.
 	public static int moveWAble(String move) {
 		int count = 0;
 		String place = compReadableMove(move);
@@ -1386,7 +1506,7 @@ public class EvalTests {
 			break;
 			case "Q": counter[0]+=queenBoard[i/8][i%8];
 			break;
-			case "K": if (totalMaterial()>=3500) { counter[0]+=kingBoard[i/8][i%8]; } else { counter[0]+=kingEndBoard[i/8][i%8]; }counter[0]+=(legalWK(findWhiteKing()).length())/5;
+			case "K": if (totalMaterial()>=3500 && totalMoves<18) { counter[0]+=kingStartBoard[i/8][i%8]; } else if (totalMaterial()>=3500 && totalMoves>=18) { counter[0]+=kingBoard[i/8][i%8]; }else { counter[0]+=kingEndBoard[i/8][i%8]; }counter[0]+=(legalWK(findWhiteKing()).length())/5;
 			break;
 			case "p": counter[1]+=pawnBoard[7-(i/8)][7-(i%8)];
 			break;
@@ -1398,7 +1518,7 @@ public class EvalTests {
 			break;
 			case "q": counter[1]+=queenBoard[7-(i/8)][7-(i%8)];
 			break;
-			case "k": if (totalMaterial()>=3500) { counter[0]+=kingBoard[7-(i/8)][7-(i%8)]; } else { counter[0] += kingEndBoard[7-(i/8)][7-(i%8)]; }counter[0]+=(legalBK(findBlackKing()).length())/5;
+			case "k": if (totalMaterial()>=3500 && totalMoves<18) { counter[0]+=kingStartBoard[7-(i/8)][7-(i%8)]; } else if (totalMaterial()>=3500 && totalMoves>=18) { counter[0]+=kingBoard[7-(i/8)][7-(i%8)]; }else { counter[0] += kingEndBoard[7-(i/8)][7-(i%8)]; }counter[0]+=(legalBK(findBlackKing()).length())/5;
 			break;
 			}
 		}
@@ -1408,7 +1528,7 @@ public class EvalTests {
 	}
 
 	public static double[] simplePositionalEval() {
-		double[] counter=new double[15]; //Can be combined into two numbers. But this is the precaution for now. 15th number is the player to move.
+		double[] counter=new double[21]; //Can be combined into two numbers. But this is the precaution for now. 15th number is the player to move.
 		for (int i=0;i<64;i++) {
 			switch (chessBoard[i/8][i%8]) {
 			case "P": counter[0]+=pawnBoard[i/8][i%8];
@@ -1421,7 +1541,7 @@ public class EvalTests {
 			break;
 			case "Q": counter[4]+=queenBoard[i/8][i%8];
 			break;
-			case "K": if (totalMaterial()>=3500) { counter[5]+=kingBoard[i/8][i%8]; } else { counter[5]+=kingEndBoard[i/8][i%8]; }counter[5]+=(legalWK(findWhiteKing()).length())/5;
+			case "K": if (totalMaterial()>=3500 && totalMoves<18) { counter[5]+=kingStartBoard[i/8][i%8]; }  else if (totalMaterial()>=3500 && totalMoves>=18) { counter[5]+=kingBoard[i/8][i%8]; } else { counter[5]+=kingEndBoard[i/8][i%8]; }counter[5]+=(legalWK(findWhiteKing()).length())/5;
 			break;
 			case "p": counter[6]+=pawnBoard[7-(i/8)][7-(i%8)];
 			break;
@@ -1433,10 +1553,23 @@ public class EvalTests {
 			break;
 			case "q": counter[10]+=queenBoard[7-(i/8)][7-(i%8)];
 			break;
-			case "k": if (totalMaterial()>=3500) { counter[11]+=kingBoard[7-(i/8)][7-(i%8)]; } else { counter[11] += kingEndBoard[7-(i/8)][7-(i%8)]; }counter[11]+=(legalBK(findBlackKing()).length())/5;
+			case "k": if (totalMaterial()>=3500 && totalMoves<18) { counter[11]+=kingStartBoard[7-(i/8)][7-(i%8)]; } else if (totalMaterial()>=3500 && totalMoves>=18) { counter[11]+=kingBoard[7-(i/8)][7-(i%8)]; } else { counter[11] += kingEndBoard[7-(i/8)][7-(i%8)]; }counter[11]+=(legalBK(findBlackKing()).length())/5;
 			break;
 			}
 		}
+		//NUMBERS 18,19 TELL WHETHER THE BOARD PREFERS THE PAWN POSITION
+		if (counter[0]>=20) counter[17]=1;
+		else if (counter[0]<=20) counter[17]=-1;
+		if (counter[6]>=20) counter[18]=1;
+		else if (counter[6]<=20) counter[18]=-1;
+		
+		//NUMBERS 20,21 TELL WHETHER THE BOARD PREFERS THE KNIGHT POSITION
+		if (counter[0]>=0) counter[19]=1;
+		else if (counter[0]<=0) counter[19]=-1;
+		if (counter[6]>=0) counter[20]=1;
+		else if (counter[6]<=0) counter[20]=-1;
+		
+		
 		for (int i = 0;i<12;i++) {
 			counter[i]/=100;
 		}
@@ -1449,9 +1582,17 @@ public class EvalTests {
 		counter[5]*=2;
 		counter[11]*=2;
 		if (totalMaterial()<3500) {counter[0]*=2; counter[6]*=2;}
-		counter[12]=counter[0]+counter[1]+counter[2]+counter[3]+counter[4]+counter[5];
-		counter[13]=counter[6]+counter[7]+counter[8]+counter[9]+counter[10]+counter[11];
+		counter[12]=(counter[0]+counter[1]+counter[2]+counter[3]+counter[4]+counter[5])/3;
+		counter[13]=(counter[6]+counter[7]+counter[8]+counter[9]+counter[10]+counter[11])/3;
 		counter[14]=totalMoves%2;
+		
+		//NUMBERS 16,17 TELL WHETHER THE BOARD PREFERS THE KING'S POSITION
+		if (counter[5]>=0) counter[15]=1;
+		if (counter[11]>=0) counter[16]=1;
+		if (counter[5]<=0) counter[15]=-1;
+		if (counter[11]<=0) counter[16]=-1;
+		
+		
 		return counter;
 	}
 
@@ -1473,7 +1614,7 @@ public class EvalTests {
 					/*
 					if (chessBoard[row][column].equals(middleW[k])) middlePieces[3*(2*(i-1)+(j-1))+k]=1;
 					if (chessBoard[row][column].equals(middleB[k])) middlePieces[3*(2*(i-1)+(j-1))+k]=-1;
-					*/
+					 */
 					if (chessBoard[row][column].equals(middleW[k])) middlePieces[k]=1;
 					if (chessBoard[row][column].equals(middleB[k])) middlePieces[3+k]=-1;
 				}
@@ -1495,6 +1636,8 @@ public class EvalTests {
 		if (chessBoard[5][5].equals("N")) middlePieces[19]=1; //f3
 		if (chessBoard[2][2].equals("n")) middlePieces[20]=1; //c6
 		if (chessBoard[2][5].equals("n")) middlePieces[21]=1; //f6
+
+		/*
 		middlePieces = mxjava.appendArrays(middlePieces, controlSquareW("d4"));
 		middlePieces = mxjava.appendArrays(middlePieces, controlSquareW("d5"));
 		middlePieces = mxjava.appendArrays(middlePieces, controlSquareW("e4"));
@@ -1503,6 +1646,11 @@ public class EvalTests {
 		middlePieces = mxjava.appendArrays(middlePieces, controlSquareB("d5"));
 		middlePieces = mxjava.appendArrays(middlePieces, controlSquareB("e4"));
 		middlePieces = mxjava.appendArrays(middlePieces, controlSquareB("e5"));
+		*/
+		double[] controlMiddleSquaresB = mxjava.addVectors(mxjava.addVectors(controlSquareB("e4"), controlSquareB("e5")),mxjava.addVectors(controlSquareB("d4"), controlSquareB("d5")));
+		double[] controlMiddleSquaresW = mxjava.addVectors(mxjava.addVectors(controlSquareW("e4"), controlSquareW("e5")),mxjava.addVectors(controlSquareW("d4"), controlSquareW("d5")));
+		middlePieces = mxjava.appendArrays(middlePieces, mxjava.addVectors(controlMiddleSquaresB, controlMiddleSquaresW));
+
 		return middlePieces;
 	}
 
@@ -1591,8 +1739,15 @@ public class EvalTests {
 		return mobility;
 	}
 
+	public static double smallestPiece(double[] a) {
+		double[] outputs = {-0.9,-0.5,-0.5,0.5,0.9};
+		for (int i=0;i<outputs.length;i++) {
+			if (a[i]!=0) return outputs[i];
+		}
+		return 0;
+	}
 	public static double[] wherePiecesAre() {
-		double[] piecePlacement = new double[16+8+8+8+8+16+8+8+8+8]; //PAWN, KNIGHT, ROOK, BISHOP, QUEEN, BPAWN, BKNIGHT, BBISHOP, BROOK, BQUEEN
+		double[] piecePlacement = new double[240]; //PAWN, KNIGHT, ROOK, BISHOP, QUEEN, BPAWN, BKNIGHT, BBISHOP, BROOK, BQUEEN
 		ArrayList<Double> coor1 = new ArrayList<>();
 		ArrayList<Double> coor2 = new ArrayList<>();
 		ArrayList<Double> coor3 = new ArrayList<>();
@@ -1603,27 +1758,32 @@ public class EvalTests {
 		ArrayList<Double> coor8 = new ArrayList<>();
 		ArrayList<Double> coor9 = new ArrayList<>();
 		ArrayList<Double> coor10 = new ArrayList<>();
+		//is it attacked? is it defended? which is the smallest piece?
 		for (int i=0; i<64; i++) {
+			int displayR = 8-(i/8);
+			String directory = colNames[i%8]+displayR;
+			int row = i/8;
+			int column = i%8;
 			switch (chessBoard[i/8][i%8]) {
-			case "P": coor1.add((double) (i/8)); coor1.add((double) (i%8));
+			case "P": coor1.add((double) (row)/8); coor1.add((double) (column)/8); coor1.add(mxjava.sumOfArrayParts(controlSquareB(directory))/3); coor1.add(smallestPiece(controlSquareB(directory))); coor1.add(mxjava.sumOfArrayParts(controlSquareW(directory))/3); 
 			break;
-			case "N": coor2.add((double) (i/8)); coor2.add((double) (i%8));
+			case "N": coor2.add((double) (row)/8); coor2.add((double) (column)/8); coor2.add(mxjava.sumOfArrayParts(controlSquareB(directory))/3); coor2.add(smallestPiece(controlSquareB(directory))); coor2.add(mxjava.sumOfArrayParts(controlSquareW(directory))/3);
 			break;
-			case "B": coor3.add((double) (i/8)); coor3.add((double) (i%8));
+			case "B": coor3.add((double) (row)/8); coor3.add((double) (column)/8); coor3.add(mxjava.sumOfArrayParts(controlSquareB(directory))/3); coor3.add(smallestPiece(controlSquareB(directory))); coor3.add(mxjava.sumOfArrayParts(controlSquareW(directory))/3);
 			break;
-			case "R": coor4.add((double) (i/8)); coor4.add((double) (i%8));
+			case "R": coor4.add((double) (row)/8); coor4.add((double) (column)/8); coor4.add(mxjava.sumOfArrayParts(controlSquareB(directory))/3); coor4.add(smallestPiece(controlSquareB(directory))); coor4.add(mxjava.sumOfArrayParts(controlSquareW(directory))/3);
 			break;
-			case "Q": coor5.add((double) (i/8)); coor5.add((double) (i%8));
+			case "Q": coor5.add((double) (row)/8); coor5.add((double) (column)/8); coor5.add(mxjava.sumOfArrayParts(controlSquareB(directory))/3); coor5.add(smallestPiece(controlSquareB(directory))); coor5.add(mxjava.sumOfArrayParts(controlSquareW(directory))/3);
 			break;
-			case "p": coor6.add((double) (i/8)); coor6.add((double) (i%8));
+			case "p": coor6.add((double) (row)/8); coor6.add((double) (column)/8); coor6.add(mxjava.sumOfArrayParts(controlSquareW(directory))/3); coor6.add(smallestPiece(controlSquareW(directory))); coor6.add(mxjava.sumOfArrayParts(controlSquareB(directory))/3);
 			break;
-			case "n": coor7.add((double) (i/8)); coor7.add((double) (i%8));
+			case "n": coor7.add((double) (row)/8); coor7.add((double) (column)/8); coor7.add(mxjava.sumOfArrayParts(controlSquareW(directory))/3); coor7.add(smallestPiece(controlSquareW(directory))); coor7.add(mxjava.sumOfArrayParts(controlSquareB(directory))/3);
 			break;
-			case "b": coor8.add((double) (i/8)); coor8.add((double) (i%8));
+			case "b": coor8.add((double) (row)/8); coor8.add((double) (column)/8); coor8.add(mxjava.sumOfArrayParts(controlSquareW(directory))/3); coor8.add(smallestPiece(controlSquareW(directory))); coor8.add(mxjava.sumOfArrayParts(controlSquareB(directory))/3);
 			break;
-			case "r": coor9.add((double) (i/8)); coor9.add((double) (i%8));
+			case "r": coor9.add((double) (row)/8); coor9.add((double) (column)/8); coor9.add(mxjava.sumOfArrayParts(controlSquareW(directory))/3); coor9.add(smallestPiece(controlSquareW(directory))); coor9.add(mxjava.sumOfArrayParts(controlSquareB(directory))/3);
 			break;
-			case "q": coor10.add((double) (i/8)); coor10.add((double) (i%8));
+			case "q": coor10.add((double) (row)/8); coor10.add((double) (column)/8); coor10.add(mxjava.sumOfArrayParts(controlSquareW(directory))/3); coor10.add(smallestPiece(controlSquareW(directory))); coor10.add(mxjava.sumOfArrayParts(controlSquareB(directory))/3);
 			break;
 			}
 		}
@@ -1631,34 +1791,31 @@ public class EvalTests {
 			piecePlacement[i]=coor1.get(i);
 		}
 		for (int i = 0;i<coor2.size();i++) {
-			piecePlacement[16+i]=coor2.get(i);
+			piecePlacement[40+i]=coor2.get(i);
 		}
 		for (int i = 0;i<coor3.size();i++) {
-			piecePlacement[24+i]=coor3.get(i);
+			piecePlacement[60+i]=coor3.get(i);
 		}
 		for (int i = 0;i<coor4.size();i++) {
-			piecePlacement[32+i]=coor4.get(i);
+			piecePlacement[80+i]=coor4.get(i);
 		}
 		for (int i = 0;i<coor5.size();i++) {
-			piecePlacement[40+i]=coor5.get(i);
+			piecePlacement[100+i]=coor5.get(i);
 		}
 		for (int i = 0;i<coor6.size();i++) {
-			piecePlacement[48+i]=coor6.get(i);
+			piecePlacement[120+i]=coor6.get(i);
 		}
 		for (int i = 0;i<coor7.size();i++) {
-			piecePlacement[64+i]=coor7.get(i);
+			piecePlacement[160+i]=coor7.get(i);
 		}
 		for (int i = 0;i<coor8.size();i++) {
-			piecePlacement[72+i]=coor8.get(i);
+			piecePlacement[180+i]=coor8.get(i);
 		}
 		for (int i = 0;i<coor9.size();i++) {
-			piecePlacement[80+i]=coor9.get(i);
+			piecePlacement[200+i]=coor9.get(i);
 		}
 		for (int i = 0;i<coor10.size();i++) {
-			piecePlacement[88+i]=coor10.get(i);
-		}
-		for (int i = 0;i<piecePlacement.length;i++) {
-			piecePlacement[i]/=8;
+			piecePlacement[220+i]=coor10.get(i);
 		}
 		return piecePlacement;
 	}
